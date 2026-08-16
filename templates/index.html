@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scanner de Exposicao</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header class="topo">
+      <span class="escudo">&#128737;</span>
+      <h1>Scanner de Exposicao</h1>
+    </header>
+    <p class="subtitulo">Recon de superficie de ataque + relatorio em PDF, em portugues.</p>
+
+    <!-- Formulario -->
+    <div class="card" id="cartaoForm">
+      <form id="formScan">
+        <label class="campo" for="dominio">Dominio ou URL do alvo</label>
+        <input type="text" id="dominio" name="dominio"
+               placeholder="ex: exemplo.com.br" autocomplete="off" autofocus>
+
+        <label class="autorizacao">
+          <input type="checkbox" id="autorizado" name="autorizado" value="sim">
+          <span class="txt">
+            <strong>Tenho autorizacao para o scan ativo deste alvo.</strong><br>
+            Marcado: faz port scan, busca arquivos sensiveis e sonda subdominios
+            (manda trafego pro alvo). Desmarcado: so coleta dados publicos passivos.
+          </span>
+        </label>
+
+        <button type="submit" class="acao" id="btnScan">Escanear</button>
+      </form>
+    </div>
+
+    <!-- Progresso -->
+    <div class="card progresso" id="cartaoProgresso">
+      <p style="margin-top:0"><span class="spinner"></span> Escaneando <strong id="alvoNome"></strong>...</p>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('formScan');
+    const btn = document.getElementById('btnScan');
+    const cartaoProgresso = document.getElementById('cartaoProgresso');
+    const logDiv = document.getElementById('log');
+    const alvoNome = document.getElementById('alvoNome');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      btn.disabled = true;
+      btn.textContent = 'Escaneando...';
+
+      const dados = new FormData(form);
+      const resp = await fetch('/scan', { method: 'POST', body: dados });
+      const info = await resp.json();
+
+      if (info.erro) {
+        alert(info.erro);
+        btn.disabled = false;
+        btn.textContent = 'Escanear';
+        return;
+      }
+
+      alvoNome.textContent = info.dominio;
+      cartaoProgresso.classList.add('ativo');
+      acompanhar(info.job_id);
+    });
+
+    function acompanhar(jobId) {
+      const timer = setInterval(async () => {
+        const resp = await fetch('/status/' + jobId);
+        const estado = await resp.json();
+
+        // redesenha o log
+        logDiv.innerHTML = estado.log.map(linha => {
+          const classe = linha.startsWith('ERRO') ? 'linha erro' : 'linha';
+          return `<div class="${classe}">${escapar(linha)}</div>`;
+        }).join('');
+        logDiv.scrollTop = logDiv.scrollHeight;
+
+        if (estado.status === 'concluido') {
+          clearInterval(timer);
+          window.location = '/resultado/' + jobId;
+        } else if (estado.status === 'erro') {
+          clearInterval(timer);
+          btn.disabled = false;
+          btn.textContent = 'Escanear novamente';
+        }
+      }, 1500);
+    }
+
+    function escapar(txt) {
+      const d = document.createElement('div');
+      d.textContent = txt;
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>

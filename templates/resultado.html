@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resultado - {{ dados.dominio }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header class="topo">
+      <span class="escudo">&#128737;</span>
+      <h1>{{ dados.dominio }}</h1>
+      {% if dados.scan_ativo_feito %}
+        <span class="modo-badge ativo">scan ativo + passivo</span>
+      {% else %}
+        <span class="modo-badge passivo">somente passivo</span>
+      {% endif %}
+    </header>
+    <p class="subtitulo">IP: {{ dados.ip }} &nbsp;&middot;&nbsp; Servidor: {{ dados.server_header }}</p>
+
+    <!-- Resumo em metricas -->
+    <div class="resumo-grade">
+      <div class="metrica">
+        <div class="num">{{ portas|length }}</div>
+        <div class="rot">portas abertas</div>
+      </div>
+      <div class="metrica {% if dados.subdominios_vivos %}ok{% endif %}">
+        <div class="num">{{ dados.subdominios_vivos|length }}</div>
+        <div class="rot">subdominios vivos</div>
+      </div>
+      <div class="metrica {% if dados.caminhos %}alerta{% endif %}">
+        <div class="num">{{ dados.caminhos|length }}</div>
+        <div class="rot">arquivos sensiveis</div>
+      </div>
+      <div class="metrica {% if dados.headers_seg.ausentes %}alerta{% endif %}">
+        <div class="num">{{ dados.headers_seg.ausentes|length }}</div>
+        <div class="rot">headers faltando</div>
+      </div>
+      <div class="metrica {% if dados.cves %}alerta{% endif %}">
+        <div class="num">{{ dados.cves|length }}</div>
+        <div class="rot">CVEs conhecidas</div>
+      </div>
+    </div>
+
+    <!-- Portas -->
+    <h2 class="secao">Portas abertas</h2>
+    {% if portas %}
+    <table>
+      <tr><th style="width:70px">Porta</th><th>O que significa</th><th>Detectado no servidor</th></tr>
+      {% for p in portas %}
+      <tr>
+        <td><code>{{ p.porta }}</code></td>
+        <td>{{ p.significado }}</td>
+        <td>{% if p.banner %}<code>{{ p.banner }}</code>{% else %}<span class="vazio">-</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="vazio">Nenhuma porta aberta conhecida.</p>
+    {% endif %}
+
+    <!-- Arquivos sensiveis -->
+    <h2 class="secao">Arquivos e caminhos sensiveis</h2>
+    {% if dados.caminhos %}
+    <table>
+      <tr><th>Caminho</th><th style="width:200px">Situacao</th><th style="width:90px">Tamanho</th></tr>
+      {% for c in dados.caminhos %}
+      <tr>
+        <td><code>/{{ c.caminho }}</code></td>
+        <td>
+          {% if c.status == 200 %}<span class="tag v200">{{ c.significado }}</span>
+          {% elif c.status in [401, 403] %}<span class="tag vprot">{{ c.significado }}</span>
+          {% else %}<span class="tag vredir">{{ c.significado }}</span>{% endif %}
+        </td>
+        <td>{{ c.tamanho }} b</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="vazio">Nenhum caminho sensivel respondeu (ou o scan ativo nao foi autorizado).</p>
+    {% endif %}
+
+    <!-- TLS -->
+    <h2 class="secao">Configuracao TLS (HTTPS)</h2>
+    {% if not dados.tls.disponivel %}
+      <p class="vazio">Nao foi possivel avaliar o TLS ({{ dados.tls.erro }}).</p>
+    {% else %}
+      <table>
+        <tr><td style="width:180px">Versao aceita</td><td><code>{{ dados.tls.versao or 'nao identificada' }}</code></td></tr>
+        <tr><td>Cifra</td><td><code>{{ dados.tls.cifra or 'nao identificada' }}</code></td></tr>
+        <tr><td>Certificado emitido por</td><td>{{ dados.tls.emissor or 'nao identificado' }}</td></tr>
+        <tr><td>Certificado expira em</td><td>{{ dados.tls.expira_em or 'nao identificado' }}</td></tr>
+      </table>
+      {% for aviso in dados.tls.avisos %}
+        <div class="aviso-box">&#9888; {{ aviso }}</div>
+      {% endfor %}
+    {% endif %}
+
+    <!-- Headers de seguranca -->
+    <h2 class="secao">Headers de seguranca ausentes</h2>
+    {% if dados.headers_seg.ausentes %}
+    <table>
+      <tr><th style="width:220px">Header ausente</th><th>Risco de nao ter</th></tr>
+      {% for h in dados.headers_seg.ausentes %}
+      <tr><td><code>{{ h.header }}</code></td><td>{{ h.risco }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="vazio">Todos os headers de seguranca avaliados estao presentes. Otimo.</p>
+    {% endif %}
+
+    <!-- CVEs -->
+    <h2 class="secao">Vulnerabilidades conhecidas (CVEs)</h2>
+    {% if dados.cves %}
+    <table>
+      <tr><th style="width:150px">CVE</th><th style="width:110px">Gravidade</th><th>Descricao</th></tr>
+      {% for cve in dados.cves %}
+      <tr><td><code>{{ cve.id }}</code></td><td>{{ cve.gravidade }}</td><td>{{ cve.descricao }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="vazio">Nenhuma CVE encontrada nas bases publicas consultadas (nao significa que o site seja seguro - so que nao havia registro publico no momento).</p>
+    {% endif %}
+
+    <!-- Subdominios vivos -->
+    <h2 class="secao">Subdominios vivos</h2>
+    {% if dados.subdominios_vivos %}
+    <table>
+      <tr><th>Subdominio</th><th style="width:130px">IP</th><th style="width:60px">HTTP</th><th>Servidor / titulo</th></tr>
+      {% for s in dados.subdominios_vivos %}
+      <tr>
+        <td><code>{{ s.subdominio }}</code></td>
+        <td>{{ s.ip }}</td>
+        <td>{{ s.status if s.status is not none else '-' }}</td>
+        <td>
+          {{ s.servidor }}{% if s.titulo %} <span class="vazio">({{ s.titulo }})</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% elif dados.subdominios %}
+    <p class="vazio">{{ dados.subdominios|length }} subdominio(s) listado(s) no crt.sh, mas nenhum sondado (scan ativo nao autorizado) ou nenhum vivo.</p>
+    {% else %}
+    <p class="vazio">Nenhum subdominio encontrado.</p>
+    {% endif %}
+
+    <!-- Acoes -->
+    <div class="barra-acoes">
+      <a class="btn baixar" href="/download/{{ job_id }}">&#11015; Baixar PDF</a>
+      <a class="btn novo" href="/">Novo scan</a>
+    </div>
+  </div>
+</body>
+</html>

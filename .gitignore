@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+
+# Relatorios de scan NUNCA vao pro git: contem recon de sites reais
+# (portas, subdominios, CVEs), que nao deve virar arquivo publico.
+*.pdf
+relatorios/
